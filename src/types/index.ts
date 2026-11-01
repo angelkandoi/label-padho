@@ -40,3 +40,28 @@ export interface Product {
   updatedAt: string;
 }
 
+export interface DictionaryEntry {
+  id: string;
+  names: string[];
+  insCode: string | null;
+  category: string;
+  description: string;
+  purpose: string;
+  sourceName: string;
+  sourceUrl: string;
+  lastVerified: string;
+}
+
+export interface MatchedResult {
+  status: 'Matched';
+  matchType: 'exact_alias' | 'normalized_alias' | 'ins_code';
+  entry: DictionaryEntry;
+}
+
+export interface UnidentifiedResult {
+  status: 'Unidentified';
+}
+
+export type MatchResult = MatchedResult | UnidentifiedResult;
+
+
