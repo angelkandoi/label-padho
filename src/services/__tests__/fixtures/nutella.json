@@ -1,0 +1,23 @@
+{
+  "code": "3017620422003",
+  "status": 1,
+  "status_verbose": "product found",
+  "product": {
+    "product_name": "Nutella",
+    "brands": "Ferrero",
+    "ingredients_text": "sugar, palm oil",
+    "ingredients_text_en": "sugar, palm oil",
+    "nutriments": {
+      "energy-kcal_100g": 539,
+      "energy-kcal": 539,
+      "fat_100g": 30.9,
+      "saturated-fat_100g": 10.6,
+      "carbohydrates_100g": 57.5,
+      "sugars_100g": 56.3,
+      "proteins_100g": 6.3,
+      "salt_100g": 0.107,
+      "sodium_100g": 0.0428
+    }
+  }
+}
+

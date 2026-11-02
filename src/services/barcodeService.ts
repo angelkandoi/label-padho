@@ -45,7 +45,7 @@ export function validateBarcode(barcode: string): { valid: boolean; error?: stri
   }
 
   if (!validateCheckDigit(cleaned)) {
-    return { valid: false, error: 'Invalid barcode check digit.' };
+    return { valid: false, error: 'Invalid barcode.' };
   }
 
   return { valid: true };

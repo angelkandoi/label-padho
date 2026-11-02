@@ -4,6 +4,7 @@ import { DatabaseClient } from '../database/db';
 import { saveProduct, getProductByBarcode } from '../database/productRepository';
 import { recordScan } from '../database/historyRepository';
 import { normalizeProduct } from '../domain/normalizer';
+import { validateBarcode } from './barcodeService';
 import { Product } from '../types';
 import { logger } from './logger';
 
@@ -11,7 +12,7 @@ export const OPEN_FOOD_FACTS_ATTRIBUTION = 'Product data from Open Food Facts, l
 export const USER_AGENT = 'LabelPadho/1.0 (angelaggarwal2409@gmail.com)';
 export const API_TIMEOUT_MS = 8000;
 
-export type ProductErrorKind = 'NOT_FOUND' | 'TIMEOUT' | 'OFFLINE' | 'SERVER_ERROR' | 'NEEDS_INTERNET';
+export type ProductErrorKind = 'NOT_FOUND' | 'TIMEOUT' | 'OFFLINE' | 'SERVER_ERROR' | 'NEEDS_INTERNET' | 'INVALID_BARCODE';
 
 export interface ProductError {
   kind: ProductErrorKind;
@@ -49,6 +50,17 @@ export async function fetchProduct(
   customFetch?: typeof fetch
 ): Promise<ProductResult> {
   const cleanedBarcode = barcode.trim();
+  const validation = validateBarcode(cleanedBarcode);
+  if (!validation.valid) {
+    return {
+      success: false,
+      error: {
+        kind: 'INVALID_BARCODE',
+        message: validation.error || 'Invalid barcode.',
+      },
+    };
+  }
+
   const fetchFn = customFetch || fetch;
 
   const url = `https://world.openfoodfacts.org/api/v2/product/${cleanedBarcode}.json?fields=code,product_name,product_name_en,brands,ingredients_text,ingredients_text_en,nutriments`;
@@ -77,7 +89,7 @@ export async function fetchProduct(
         success: false,
         error: {
           kind: 'NOT_FOUND',
-          message: 'Product not found in Open Food Facts database.',
+          message: 'This product is not in Open Food Facts yet. You can paste the ingredient text instead.',
         },
       };
     }
@@ -99,7 +111,7 @@ export async function fetchProduct(
         success: false,
         error: {
           kind: 'NOT_FOUND',
-          message: 'Product details not found.',
+          message: 'This product is not in Open Food Facts yet. You can paste the ingredient text instead.',
         },
       };
     }

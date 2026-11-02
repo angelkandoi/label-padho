@@ -54,7 +54,13 @@ describe('barcodeService', () => {
     it('rejects invalid check digits with clear message', () => {
       const result = validateBarcode('4006381333939');
       expect(result.valid).toBe(false);
-      expect(result.error).toBe('Invalid barcode check digit.');
+      expect(result.error).toBe('Invalid barcode.');
+    });
+
+    it('rejects barcode 8901030925541 with wrong check digit before network call', () => {
+      const result = validateBarcode('8901030925541');
+      expect(result.valid).toBe(false);
+      expect(result.error).toBe('Invalid barcode.');
     });
   });
 

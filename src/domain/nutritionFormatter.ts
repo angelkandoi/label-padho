@@ -34,15 +34,15 @@ export function formatNutrition(rawNutriments: Record<string, unknown> | null | 
   }
 
   return {
-    energyKcal: extractNutrient(rawNutriments['energy-kcal_100g'] ?? rawNutriments['energy-kcal']),
-    fat: extractNutrient(rawNutriments['fat_100g']),
-    saturatedFat: extractNutrient(rawNutriments['saturated-fat_100g']),
-    carbohydrates: extractNutrient(rawNutriments['carbohydrates_100g']),
-    sugars: extractNutrient(rawNutriments['sugars_100g']),
-    addedSugars: extractNutrient(rawNutriments['added-sugars_100g']),
-    protein: extractNutrient(rawNutriments['proteins_100g']),
-    sodium: extractNutrient(rawNutriments['sodium_100g']),
-    salt: extractNutrient(rawNutriments['salt_100g']),
+    energyKcal: extractNutrient(rawNutriments['energy-kcal_100g'] ?? rawNutriments['energy-kcal_value'] ?? rawNutriments['energy-kcal']),
+    fat: extractNutrient(rawNutriments['fat_100g'] ?? rawNutriments['fat_value'] ?? rawNutriments['fat']),
+    saturatedFat: extractNutrient(rawNutriments['saturated-fat_100g'] ?? rawNutriments['saturated-fat_value'] ?? rawNutriments['saturated-fat']),
+    carbohydrates: extractNutrient(rawNutriments['carbohydrates_100g'] ?? rawNutriments['carbohydrates_value'] ?? rawNutriments['carbohydrates']),
+    sugars: extractNutrient(rawNutriments['sugars_100g'] ?? rawNutriments['sugars_value'] ?? rawNutriments['sugars']),
+    addedSugars: extractNutrient(rawNutriments['added-sugars_100g'] ?? rawNutriments['added-sugars_value'] ?? rawNutriments['added-sugars']),
+    protein: extractNutrient(rawNutriments['proteins_100g'] ?? rawNutriments['proteins_value'] ?? rawNutriments['protein_100g'] ?? rawNutriments['proteins']),
+    sodium: extractNutrient(rawNutriments['sodium_100g'] ?? rawNutriments['sodium_value'] ?? rawNutriments['sodium']),
+    salt: extractNutrient(rawNutriments['salt_100g'] ?? rawNutriments['salt_value'] ?? rawNutriments['salt']),
   };
 }
 
