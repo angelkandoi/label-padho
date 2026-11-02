@@ -1,258 +1,410 @@
-// Minimal Block 5 interactive test screen for phone verification per PRD Section 9 Block 5.
+// Home screen with scan, paste, dictionary search, and history per PRD Section 6 & Block 6.
 
-import React, { useState } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView } from 'react-native';
-import { CameraView, useCameraPermissions } from 'expo-camera';
-import { fetchProduct, ProductResult, OPEN_FOOD_FACTS_ATTRIBUTION } from '../src/services/productApi';
-import { BarcodeDebouncer, validateBarcode } from '../src/services/barcodeService';
+import React, { useState, useEffect } from 'react';
+import {
+  StyleSheet,
+  Text,
+  View,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+} from 'react-native';
+import { useRouter } from 'expo-router';
+import { COLORS, SPACING, RADIUS } from '../src/constants/theme';
+import { getAllDictionaryEntries } from '../src/domain/ingredientMatcher';
 import { getDatabase } from '../src/database/db';
+import { getScanHistory, HistoryItem } from '../src/database/historyRepository';
+import { DictionaryEntry } from '../src/types';
 
-const debouncer = new BarcodeDebouncer(3000);
+export default function HomeScreen() {
+  const router = useRouter();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<DictionaryEntry[]>([]);
+  const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
 
-export default function Index() {
-  const [permission, requestPermission] = useCameraPermissions();
-  const [barcodeInput, setBarcodeInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<ProductResult | null>(null);
-  const [cameraActive, setCameraActive] = useState(false);
+  const dictionary = getAllDictionaryEntries();
 
-  const handleLookup = async (code: string) => {
-    const validation = validateBarcode(code);
-    if (!validation.valid) {
-      setResult({
-        success: false,
-        error: { kind: 'NOT_FOUND', message: validation.error || 'Invalid barcode' },
+  useEffect(() => {
+    let isMounted = true;
+    getDatabase()
+      .then(db => getScanHistory(db, 5))
+      .then(items => {
+        if (isMounted) {
+          setHistoryItems(items);
+          setHistoryLoading(false);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setHistoryItems([]);
+          setHistoryLoading(false);
+        }
       });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+    const trimmed = query.trim().toLowerCase();
+    if (!trimmed) {
+      setSearchResults([]);
       return;
     }
 
-    setLoading(true);
-    setResult(null);
+    const cleanCode = trimmed.replace(/^(?:ins|e)\s*/i, '');
 
-    try {
-      const db = await getDatabase();
-      const res = await fetchProduct(code, db);
-      setResult(res);
-    } catch {
-      setResult({
-        success: false,
-        error: { kind: 'SERVER_ERROR', message: 'Unexpected lookup failure' },
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+    const filtered = dictionary.filter(entry => {
+      const nameMatch = entry.names.some(n => n.toLowerCase().includes(trimmed));
+      const insMatch = entry.insCode ? entry.insCode.toLowerCase().includes(cleanCode) : false;
+      return nameMatch || insMatch;
+    });
 
-  const handleBarcodeScanned = ({ data }: { data: string }) => {
-    if (debouncer.shouldAcceptScan(data)) {
-      setCameraActive(false);
-      setBarcodeInput(data);
-      handleLookup(data);
-    }
+    setSearchResults(filtered.slice(0, 5));
   };
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Label Padho</Text>
-      <Text style={styles.subtitle}>Block 5 Scanner Verification</Text>
+      {/* Brand Header */}
+      <View style={styles.header}>
+        <Text style={styles.appTitle}>Label Padho</Text>
+        <Text style={styles.tagline}>Read what is on your packet.</Text>
+      </View>
 
-      {cameraActive ? (
-        <View style={styles.cameraBox}>
-          <CameraView
-            style={StyleSheet.absoluteFill}
-            barcodeScannerSettings={{
-              barcodeTypes: ['ean13', 'ean8', 'upc_a'],
-            }}
-            onBarcodeScanned={handleBarcodeScanned}
-          />
-          <TouchableOpacity style={styles.closeCamBtn} onPress={() => setCameraActive(false)}>
-            <Text style={styles.btnText}>Close Camera</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <View style={styles.card}>
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={async () => {
-              if (!permission?.granted) {
-                const res = await requestPermission();
-                if (!res.granted) return;
-              }
-              setCameraActive(true);
-            }}
-          >
-            <Text style={styles.btnText}>Open Camera Scanner</Text>
-          </TouchableOpacity>
+      {/* Primary Actions */}
+      <View style={styles.actionRow}>
+        <TouchableOpacity
+          style={[styles.primaryButton, styles.buttonFlex]}
+          onPress={() => router.push('/scanner')}
+          accessibilityRole="button"
+          accessibilityLabel="Scan barcode with camera"
+        >
+          <Text style={styles.primaryButtonText}>Scan Barcode</Text>
+        </TouchableOpacity>
 
-          <Text style={styles.label}>Or enter barcode manually:</Text>
-          <TextInput
-            style={styles.input}
-            value={barcodeInput}
-            onChangeText={setBarcodeInput}
-            placeholder="e.g. 4006381333931 or 8901030925542"
-            keyboardType="numeric"
-          />
+        <TouchableOpacity
+          style={[styles.secondaryButton, styles.buttonFlex]}
+          onPress={() => router.push('/paste')}
+          accessibilityRole="button"
+          accessibilityLabel="Paste ingredient text"
+        >
+          <Text style={styles.secondaryButtonText}>Paste Ingredients</Text>
+        </TouchableOpacity>
+      </View>
 
-          <TouchableOpacity style={styles.actionBtn} onPress={() => handleLookup(barcodeInput)}>
-            <Text style={styles.btnText}>Lookup Barcode</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      {/* Dictionary Search Box */}
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Additive & Ingredient Search</Text>
+        <Text style={styles.helperText}>
+          Search any additive code (e.g. INS 211, 500(ii)) or ingredient (e.g. maltodextrin).
+        </Text>
+        <TextInput
+          style={styles.searchInput}
+          value={searchQuery}
+          onChangeText={handleSearch}
+          placeholder="Type name or INS code..."
+          placeholderTextColor={COLORS.inkSecondary}
+          accessibilityLabel="Search ingredient dictionary"
+        />
 
-      {loading && <Text style={styles.loadingText}>Looking up product...</Text>}
-
-      {result && (
-        <View style={styles.resultBox}>
-          {result.success && result.product ? (
-            <View>
-              <Text style={styles.prodName}>{result.product.name}</Text>
-              <Text style={styles.prodBrand}>{result.product.brand || 'No brand specified'}</Text>
-              <Text style={styles.sourceTag}>Source: {result.source === 'cache' ? 'Offline Cache (SQLite)' : 'Open Food Facts'}</Text>
-              <Text style={styles.sectionHeader}>Ingredients ({result.product.parsedIngredients.length}):</Text>
-              <Text style={styles.bodyText}>{result.product.ingredientsText || 'No ingredient text'}</Text>
-              <Text style={styles.sectionHeader}>Allergens:</Text>
-              {result.product.allergens
-                .filter(a => a.state !== 'NOT_DECLARED_IN_TEXT')
-                .map(a => (
-                  <Text key={a.allergen} style={styles.allergenItem}>
-                    • {a.allergen.toUpperCase()}: {a.state}
+        {searchQuery.trim().length > 0 && (
+          <View style={styles.searchOutput}>
+            {searchResults.length > 0 ? (
+              searchResults.map(item => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.searchResultItem}
+                  onPress={() => router.push(`/ingredient/${item.id}`)}
+                >
+                  <View style={styles.resultHeader}>
+                    <Text style={styles.resultName}>{item.names[0]}</Text>
+                    {item.insCode && <Text style={styles.insBadge}>INS {item.insCode}</Text>}
+                  </View>
+                  <Text style={styles.resultPurpose} numberOfLines={2}>
+                    {item.purpose}
                   </Text>
-                ))}
-              <Text style={styles.attribution}>{OPEN_FOOD_FACTS_ATTRIBUTION}</Text>
-            </View>
-          ) : (
-            <View>
-              <Text style={styles.errorHeader}>Lookup Result: {result.error?.kind}</Text>
-              <Text style={styles.bodyText}>{result.error?.message}</Text>
-            </View>
+                  <Text style={styles.sourceText}>Source: {item.sourceName}</Text>
+                </TouchableOpacity>
+              ))
+            ) : (
+              <Text style={styles.noMatchText}>Not in our reference list.</Text>
+            )}
+          </View>
+        )}
+      </View>
+
+      {/* Recent Scans Section */}
+      <View style={styles.card}>
+        <View style={styles.cardHeaderRow}>
+          <Text style={styles.sectionTitle}>Recent Scans</Text>
+          {historyItems.length > 0 && (
+            <TouchableOpacity onPress={() => router.push('/history')}>
+              <Text style={styles.linkText}>View all</Text>
+            </TouchableOpacity>
           )}
         </View>
-      )}
+
+        {historyLoading ? (
+          <Text style={styles.loadingStateText}>Loading recent scans...</Text>
+        ) : historyItems.length > 0 ? (
+          historyItems.map(item => (
+            <TouchableOpacity
+              key={`${item.id}-${item.barcode}`}
+              style={styles.historyRow}
+              onPress={() => router.push(`/product/${item.barcode}`)}
+            >
+              <View style={styles.historyTextCol}>
+                <Text style={styles.historyName}>{item.name}</Text>
+                <Text style={styles.historyBrand}>
+                  {item.brand ? `${item.brand} • ` : ''}
+                  {item.barcode}
+                </Text>
+              </View>
+              <Text style={styles.historyTime}>
+                {new Date(item.scannedAt).toLocaleDateString()}
+              </Text>
+            </TouchableOpacity>
+          ))
+        ) : (
+          <View style={styles.emptyStateBox}>
+            <Text style={styles.emptyStateTitle}>No scanned products yet</Text>
+            <Text style={styles.emptyStateBody}>
+              Scan a barcode on food packaging or paste ingredient text to inspect additives and declared allergens.
+            </Text>
+          </View>
+        )}
+      </View>
+
+      {/* Footer Navigation */}
+      <View style={styles.footerRow}>
+        <TouchableOpacity style={styles.footerLink} onPress={() => router.push('/history')}>
+          <Text style={styles.footerText}>All History</Text>
+        </TouchableOpacity>
+        <Text style={styles.footerDivider}>•</Text>
+        <TouchableOpacity style={styles.footerLink} onPress={() => router.push('/settings')}>
+          <Text style={styles.footerText}>About & Privacy</Text>
+        </TouchableOpacity>
+      </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    padding: 20,
-    backgroundColor: '#F4EFE4',
+    padding: SPACING.lg,
+    backgroundColor: COLORS.background,
     flexGrow: 1,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#23201B',
-    marginTop: 40,
+  header: {
+    marginTop: SPACING.md,
+    marginBottom: SPACING.lg,
   },
-  subtitle: {
-    fontSize: 14,
-    color: '#9A5B13',
-    marginBottom: 20,
+  appTitle: {
+    fontFamily: 'AtkinsonHyperlegible_700Bold',
+    fontSize: 26,
+    color: COLORS.ink,
+  },
+  tagline: {
+    fontFamily: 'AtkinsonHyperlegible_400Regular',
+    fontSize: 15,
+    color: COLORS.inkSecondary,
+    marginTop: SPACING.xs,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+    marginBottom: SPACING.lg,
+  },
+  buttonFlex: {
+    flex: 1,
+    minHeight: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: RADIUS.sm,
+    paddingHorizontal: SPACING.sm,
+  },
+  primaryButton: {
+    backgroundColor: COLORS.primary,
+  },
+  primaryButtonText: {
+    fontFamily: 'AtkinsonHyperlegible_700Bold',
+    fontSize: 15,
+    color: '#FFFFFF',
+  },
+  secondaryButton: {
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.secondary,
+  },
+  secondaryButtonText: {
+    fontFamily: 'AtkinsonHyperlegible_700Bold',
+    fontSize: 15,
+    color: COLORS.secondary,
   },
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: '#CFC6B4',
-    padding: 16,
-    borderRadius: 4,
-    marginBottom: 16,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    padding: SPACING.lg,
+    marginBottom: SPACING.lg,
   },
-  label: {
+  cardHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+  },
+  sectionTitle: {
+    fontFamily: 'AtkinsonHyperlegible_700Bold',
+    fontSize: 16,
+    color: COLORS.ink,
+    marginBottom: SPACING.xs,
+  },
+  helperText: {
+    fontFamily: 'AtkinsonHyperlegible_400Regular',
+    fontSize: 13,
+    color: COLORS.inkSecondary,
+    lineHeight: 18,
+    marginBottom: SPACING.sm,
+  },
+  searchInput: {
+    minHeight: 48,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.sm,
+    paddingHorizontal: SPACING.md,
+    fontFamily: 'AtkinsonHyperlegible_400Regular',
     fontSize: 14,
-    color: '#23201B',
-    marginTop: 16,
-    marginBottom: 6,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#CFC6B4',
-    padding: 10,
-    borderRadius: 2,
-    marginBottom: 12,
+    color: COLORS.ink,
     backgroundColor: '#FFFFFF',
   },
-  actionBtn: {
-    backgroundColor: '#9A5B13',
-    padding: 14,
-    borderRadius: 2,
+  searchOutput: {
+    marginTop: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    paddingTop: SPACING.sm,
+  },
+  searchResultItem: {
+    paddingVertical: SPACING.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  resultHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
-  btnText: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-  },
-  cameraBox: {
-    height: 350,
-    borderRadius: 4,
-    overflow: 'hidden',
-    position: 'relative',
-    marginBottom: 16,
-  },
-  closeCamBtn: {
-    position: 'absolute',
-    bottom: 20,
-    alignSelf: 'center',
-    backgroundColor: '#23201B',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 2,
-  },
-  loadingText: {
-    color: '#9A5B13',
-    fontStyle: 'italic',
-    marginVertical: 12,
-  },
-  resultBox: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CFC6B4',
-    padding: 16,
-    borderRadius: 4,
-    marginTop: 10,
-  },
-  prodName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#23201B',
-  },
-  prodBrand: {
+  resultName: {
+    fontFamily: 'AtkinsonHyperlegible_700Bold',
     fontSize: 14,
-    color: '#666',
-    marginBottom: 6,
+    color: COLORS.ink,
+    textTransform: 'capitalize',
   },
-  sourceTag: {
+  insBadge: {
+    fontFamily: 'AtkinsonHyperlegible_700Bold',
     fontSize: 12,
-    color: '#2F4A3A',
-    fontWeight: 'bold',
-    marginBottom: 10,
+    color: COLORS.primary,
+    backgroundColor: COLORS.surfaceMuted,
+    paddingHorizontal: SPACING.xs,
+    paddingVertical: 2,
+    borderRadius: RADIUS.sm,
   },
-  sectionHeader: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#23201B',
-    marginTop: 10,
-    marginBottom: 4,
-  },
-  bodyText: {
+  resultPurpose: {
+    fontFamily: 'AtkinsonHyperlegible_400Regular',
     fontSize: 13,
-    color: '#23201B',
+    color: COLORS.inkSecondary,
+    marginTop: 2,
+  },
+  sourceText: {
+    fontFamily: 'AtkinsonHyperlegible_400Regular_Italic',
+    fontSize: 11,
+    color: COLORS.secondary,
+    marginTop: 2,
+  },
+  noMatchText: {
+    fontFamily: 'AtkinsonHyperlegible_400Regular_Italic',
+    fontSize: 13,
+    color: COLORS.inkSecondary,
+    paddingVertical: SPACING.sm,
+  },
+  historyRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: SPACING.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    minHeight: 48,
+  },
+  historyTextCol: {
+    flex: 1,
+    paddingRight: SPACING.sm,
+  },
+  historyName: {
+    fontFamily: 'AtkinsonHyperlegible_700Bold',
+    fontSize: 14,
+    color: COLORS.ink,
+  },
+  historyBrand: {
+    fontFamily: 'AtkinsonHyperlegible_400Regular',
+    fontSize: 12,
+    color: COLORS.inkSecondary,
+  },
+  historyTime: {
+    fontFamily: 'AtkinsonHyperlegible_400Regular',
+    fontSize: 11,
+    color: COLORS.inkSecondary,
+  },
+  linkText: {
+    fontFamily: 'AtkinsonHyperlegible_700Bold',
+    fontSize: 13,
+    color: COLORS.primary,
+  },
+  loadingStateText: {
+    fontFamily: 'AtkinsonHyperlegible_400Regular',
+    fontSize: 13,
+    color: COLORS.inkSecondary,
+    fontStyle: 'italic',
+    paddingVertical: SPACING.sm,
+  },
+  emptyStateBox: {
+    paddingVertical: SPACING.md,
+  },
+  emptyStateTitle: {
+    fontFamily: 'AtkinsonHyperlegible_700Bold',
+    fontSize: 14,
+    color: COLORS.ink,
+    marginBottom: SPACING.xs,
+  },
+  emptyStateBody: {
+    fontFamily: 'AtkinsonHyperlegible_400Regular',
+    fontSize: 13,
+    color: COLORS.inkSecondary,
     lineHeight: 18,
   },
-  allergenItem: {
+  footerRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: SPACING.md,
+    marginBottom: SPACING.xl,
+    gap: SPACING.sm,
+  },
+  footerLink: {
+    minHeight: 48,
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.sm,
+  },
+  footerText: {
+    fontFamily: 'AtkinsonHyperlegible_700Bold',
     fontSize: 13,
-    color: '#9A5B13',
-    marginVertical: 2,
+    color: COLORS.inkSecondary,
   },
-  errorHeader: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#C0392B',
-    marginBottom: 6,
-  },
-  attribution: {
-    fontSize: 11,
-    color: '#777',
-    marginTop: 16,
-    fontStyle: 'italic',
+  footerDivider: {
+    color: COLORS.border,
   },
 });
